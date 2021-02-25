@@ -1,19 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { View, Text, Button, Image } from "react-native";
 import { getShuffledDeck, getOneDrawnCard } from "../api/api";
-import { Card, CardDraw, Deck } from "../api/types";
+import { Card, Deck } from "../api/types";
 
 export default function CardGame() {
   const [currentDeck, setCurrentDeck] = useState<Deck>({
     deck_id: 0,
     remaining: 0,
     shuffled: false,
-    success: false,
-  });
-  const [currentCardDraw, setCurrentCardDraw] = useState<CardDraw>({
-    cards: [],
-    deck_id: 0,
-    remaining: 0,
     success: false,
   });
 
@@ -25,69 +19,100 @@ export default function CardGame() {
   });
 
   const [score, setScore] = useState(0);
-  const [comparisonValue, setComparisonValue] = useState();
+  const [comparisonValue, setComparisonValue] = useState(0);
   const [remainingCards, setRemainingCards] = useState(0);
 
-  useEffect(() => {
+  const start = () => {
+    getShuffledDeckFromApi();
+  };
+
+  const getShuffledDeckFromApi = () => {
     getShuffledDeck().then((response) => {
-      const { data } = response;
-      setCurrentDeck(data);
-      setRemainingCards(data.remaining);
-      drawOneCard();
+      setCurrentDeck(response);
+      setRemainingCards(response.remaining);
+      drawOneCard(response.deck_id);
     });
-  }, []);
+  };
 
-  const drawOneCard = async () => {
-    const { deck_id } = currentDeck;
-    return getOneDrawnCard(deck_id).then((response) => {
-      const { data } = response;
-      setCurrentCard(data.cards[0]);
-      setComparisonValue(data.cards[0].value);
+  const convertStringToValue = (card: any) => {
+    if (card.value === "ACE") {
+      card.value = 14;
+    } else if (card.value === "KING") {
+      card.value = 13;
+    } else if (card.value === "QUEEN") {
+      card.value = 12;
+    } else if (card.value === "JACK") {
+      card.value = 11;
+    } else {
+      card.value = parseInt(card.value);
+    }
+    return card;
+  };
 
-      return data.cards[0].value;
-    });
+  const drawOneCard = async (deck_id: number) => {
+    try {
+      const response = await getOneDrawnCard(deck_id);
+      const convertedCard = convertStringToValue(response.cards[0]);
+      setRemainingCards(response.remaining);
+      setCurrentCard(convertedCard);
+      setComparisonValue(convertedCard.value);
+      return response.cards[0];
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const onStart = () => {
-    drawOneCard().then(() => {
-      setRemainingCards(remainingCards - 1);
-    });
+    setScore(0);
+    if (remainingCards === 0) {
+      start();
+    } else {
+      drawOneCard(currentDeck.deck_id);
+    }
   };
 
   const onPressHigher = () => {
-    drawOneCard().then((cardValue) => {
-      setRemainingCards(remainingCards - 1);
-      const firstValue = cardValue;
-      console.log(firstValue);
-      console.log(comparisonValue);
-      if (firstValue > comparisonValue) {
-        console.log("Score");
-        setScore(score + 1);
-      } else {
-        console.log("No Score");
-      }
-    });
+    drawOneCard(currentDeck.deck_id)
+      .then((card: any) => {
+        const { value } = card;
+        if (value > comparisonValue) {
+          setScore(score + 1);
+        }
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   };
 
   const onPressLower = () => {
-    drawOneCard().then((cardValue) => {
-      setRemainingCards(remainingCards - 1);
-      const firstValue = cardValue;
-      console.log(firstValue);
-      console.log(comparisonValue);
-      if (firstValue < comparisonValue) {
-        console.log("Score");
-        setScore(score + 1);
-      } else {
-        console.log("No Score");
-      }
-    });
+    drawOneCard(currentDeck.deck_id)
+      .then((card: any) => {
+        const { value } = card;
+        if (value < comparisonValue) {
+          setScore(score + 1);
+        }
+      })
+      .catch((error) => {
+        console.log(error);
+      });
   };
 
-  if (!currentDeck.success && currentCardDraw.success) {
+  const renderCardImage = () => {
+    if (currentCard.image.length > 1) {
+      return (
+        <Image
+          style={{ width: 226, height: 314 }}
+          source={{ uri: currentCard.image }}
+        />
+      );
+    }
+  };
+
+  if (remainingCards === 52 || remainingCards === 0) {
     return (
       <View>
         <Text>Waiting for Deck!</Text>
+        <Button onPress={onStart} title="Start" color="#e016be" />
       </View>
     );
   }
@@ -96,16 +121,10 @@ export default function CardGame() {
     <View>
       <Text>Counter: {remainingCards}</Text>
       <Text>Score: {score}</Text>
-      <View>
-        <Image
-          style={{ width: 226, height: 314 }}
-          source={{ uri: currentCard.image }}
-        />
-      </View>
+      <View>{renderCardImage()}</View>
       <View>
         <Button onPress={onPressHigher} title="Higher" color="#1cdf3d" />
         <Button onPress={onPressLower} title="Lower" color="#e01d16" />
-        <Button onPress={onStart} title="Start" color="#e016be" />
       </View>
     </View>
   );
